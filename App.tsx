@@ -125,7 +125,7 @@ const App: React.FC = () => {
         console.error("Error sending message", error);
         setMessages(prev => prev.map(msg => 
             msg.id === modelMsgId 
-            ? { ...msg, text: "Desculpe, ocorreu um erro. Tente novamente.", isThinking: false } 
+            ? { ...msg, text: "Desculpe, ocorreu um erro. Verifique sua conexão e a chave de API.", isThinking: false } 
             : msg
         ));
     } finally {

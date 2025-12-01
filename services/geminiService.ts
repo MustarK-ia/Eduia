@@ -1,5 +1,4 @@
 import { GoogleGenAI, GenerateContentResponse, Chat } from "@google/genai";
-import { ChatMessage, Role } from "../types";
 
 class GeminiService {
   private ai: GoogleGenAI;
@@ -8,7 +7,17 @@ class GeminiService {
   private currentThinkingBudget: number | undefined = undefined;
 
   constructor() {
-    this.ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    // Validate API Key
+    const apiKey = process.env.API_KEY;
+    
+    if (!apiKey) {
+      console.error("FATAL: API_KEY is missing. Please set it in your environment variables (e.g., Vercel Settings).");
+    } else if (apiKey.startsWith("sk-or-")) {
+      console.error("CONFIGURATION ERROR: You are using an OpenRouter key (sk-or-...). The @google/genai SDK requires an official Google API Key (starts with AIza). Please get one at aistudio.google.com");
+    }
+
+    // Initialize with provided key or fallback to empty string to prevent immediate crash (calls will fail later)
+    this.ai = new GoogleGenAI({ apiKey: apiKey || "" });
   }
 
   // Initialize a new chat session with optional thinking budget
@@ -34,6 +43,16 @@ class GeminiService {
     imageBase64?: string, 
     mimeType?: string
   ): AsyncGenerator<string, void, unknown> {
+    if (!process.env.API_KEY) {
+        yield "⚠️ Erro de Configuração: API_KEY não encontrada. Configure a chave nas variáveis de ambiente do Vercel.";
+        return;
+    }
+    
+    if (process.env.API_KEY.startsWith("sk-or-")) {
+        yield "⚠️ Erro de Chave: Você está usando uma chave OpenRouter. Este app requer uma chave oficial do Google (AIza...).";
+        return;
+    }
+
     if (!this.chat && !imageBase64) {
       throw new Error("Chat not initialized");
     }
@@ -76,9 +95,17 @@ class GeminiService {
         }
       }
 
-    } catch (error) {
+    } catch (error: any) {
       console.error("Gemini API Error:", error);
-      yield "Desculpe, tive um problema ao tentar responder. Verifique sua conexão ou tente novamente mais tarde.";
+      let errorMessage = "Desculpe, tive um problema ao tentar responder.";
+      
+      if (error.message?.includes("403") || error.toString().includes("API key")) {
+          errorMessage = "Erro de autenticação (403). Verifique se sua API KEY é válida e pertence ao Google AI Studio.";
+      } else if (error.message?.includes("429")) {
+          errorMessage = "Muitas requisições. Por favor, aguarde um momento.";
+      }
+      
+      yield errorMessage;
     }
   }
 }
