@@ -1,0 +1,8 @@
+{
+  "name": "EduIA - Sua Assistente Escolar",
+  "description": "Uma inteligência artificial gratuita projetada para ajudar estudantes com deveres de casa, explicações de matérias e organização de estudos. Suporta upload de imagens para dúvidas visuais.",
+  "requestFramePermissions": [
+    "microphone",
+    "camera"
+  ]
+}
