@@ -7,8 +7,8 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
   
   // Use the provided OpenRouter key if no environment variable is set
-  // Switching back to the '94b3' key as 'f769' is confirmed invalid (User not found)
-  const apiKey = env.API_KEY || "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";
+  // Updated to new key ending in ...cb0c
+  const apiKey = env.API_KEY || "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";
 
   return {
     plugins: [react()],
