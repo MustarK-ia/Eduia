@@ -9,7 +9,8 @@ class GeminiService {
   // OpenRouter specific state
   private isOpenRouter: boolean = false;
   private openRouterKey: string = "";
-  private openRouterHistory: Array<{ role: string; content: any }> = [];
+  // History now stores extended properties like reasoning_details
+  private openRouterHistory: Array<{ role: string; content: any; reasoning_details?: any }> = [];
 
   constructor() {
     // Validate API Key
@@ -45,6 +46,7 @@ class GeminiService {
           systemInstruction: systemInstruction,
           thinkingConfig: thinkingBudget ? { thinkingBudget } : undefined,
           temperature: thinkingBudget ? undefined : 0.7,
+          tools: [{googleSearch: {}}], // Enable native search for Google keys
         },
       });
     }
@@ -93,6 +95,7 @@ class GeminiService {
           config: {
             systemInstruction: this.currentSystemPrompt,
             thinkingConfig: this.currentThinkingBudget ? { thinkingBudget: this.currentThinkingBudget } : undefined,
+            tools: [{googleSearch: {}}],
           }
         });
       } else if (this.chat) {
@@ -103,6 +106,15 @@ class GeminiService {
       if (streamResult) {
         for await (const chunk of streamResult) {
           const c = chunk as GenerateContentResponse;
+          
+          // Yield Search Grounding Metadata if present (to show sources)
+          if (c.candidates?.[0]?.groundingMetadata) {
+             const metadata = JSON.stringify({ groundingMetadata: c.candidates[0].groundingMetadata });
+             // We yield a special marker that the UI can parse, or just attach it to the final object.
+             // For simplicity in this stream, we will just handle text, but strictly speaking 
+             // the UI should handle this. Let's keep it simple for now and just yield text.
+          }
+
           if (c.text) {
             yield c.text;
           }
@@ -135,24 +147,25 @@ class GeminiService {
         this.openRouterHistory.push(newMessage);
 
         // Determine Model
-        // Use a Gemini model via OpenRouter for consistency, or a "thinking" model if budget is set
+        // Use a model that supports free tier and reasoning/thinking if possible
         const model = this.currentThinkingBudget 
             ? "google/gemini-2.0-flash-thinking-exp:free" 
-            : "google/gemini-2.0-flash-lite-preview-02-05:free";
+            : "google/gemini-2.0-pro-exp-02-05:free";
 
         const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
             method: "POST",
             headers: {
                 "Authorization": `Bearer ${this.openRouterKey}`,
-                "HTTP-Referer": "https://eduia.app", // Required by OpenRouter
+                "HTTP-Referer": "https://eduia.app",
                 "X-Title": "EduIA",
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
                 model: model,
-                messages: this.openRouterHistory,
+                messages: this.openRouterHistory, // Sends history WITH previous reasoning_details
                 stream: true,
-                // Some OpenRouter models support reasoning parameters, but we stick to defaults for compatibility
+                // Activate reasoning as requested
+                reasoning: { enabled: true } 
             })
         });
 
@@ -166,6 +179,7 @@ class GeminiService {
         const decoder = new TextDecoder("utf-8");
         let buffer = "";
         let fullResponseText = "";
+        let fullReasoningDetails: any = null; // To accumulate reasoning details
 
         while (true) {
             const { done, value } = await reader.read();
@@ -183,11 +197,28 @@ class GeminiService {
 
                     try {
                         const json = JSON.parse(dataStr);
-                        const content = json.choices?.[0]?.delta?.content || "";
+                        const delta = json.choices?.[0]?.delta;
+
+                        // 1. Handle Content Streaming
+                        const content = delta?.content || "";
                         if (content) {
                             fullResponseText += content;
                             yield content;
                         }
+
+                        // 2. Handle Reasoning Details Streaming/Accumulation
+                        // Some providers stream it, some send it at the end. 
+                        // We check for the field in the delta.
+                        if (delta?.reasoning_details) {
+                            if (typeof delta.reasoning_details === 'string') {
+                                // If it's a string accumulation
+                                fullReasoningDetails = (fullReasoningDetails || "") + delta.reasoning_details;
+                            } else {
+                                // If it's an object update (less common in stream but possible)
+                                fullReasoningDetails = delta.reasoning_details;
+                            }
+                        }
+
                     } catch (e) {
                         // Ignore parse errors for partial chunks
                     }
@@ -196,7 +227,17 @@ class GeminiService {
         }
 
         // Append assistant response to history
-        this.openRouterHistory.push({ role: "assistant", content: fullResponseText });
+        // CRITICAL: We pass back the reasoning_details so the next request includes them
+        const assistantMessage: any = { 
+            role: "assistant", 
+            content: fullResponseText 
+        };
+
+        if (fullReasoningDetails) {
+            assistantMessage.reasoning_details = fullReasoningDetails;
+        }
+
+        this.openRouterHistory.push(assistantMessage);
 
     } catch (error: any) {
         console.error("OpenRouter Error:", error);
