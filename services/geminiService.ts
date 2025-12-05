@@ -74,15 +74,13 @@ class GeminiService {
             if (error.message === "OPENROUTER_401") {
                 yield `### ⛔ Acesso Negado (Erro 401)
                 
-A chave de API configurada no código (**sk-or-v1-f769...**) foi rejeitada pelo servidor ("User not found"). Isso significa que ela expirou ou foi deletada.
+A chave de API configurada no código (**sk-or-v1-bd6e...**) foi rejeitada pelo servidor ("User not found"). Isso significa que ela expirou ou foi deletada.
 
 **Como resolver gratuitamente:**
 1. Acesse [openrouter.ai](https://openrouter.ai)
 2. Faça login com sua conta Google.
 3. Vá em "Keys" e crie uma nova chave.
-4. Substitua a chave no arquivo \`vite.config.ts\`.
-
-*Tentei usar uma chave de backup, mas se você está vendo isso, ela também falhou.*`;
+4. Substitua a chave no arquivo \`vite.config.ts\`.`;
             } else {
                 yield `Desculpe, ocorreu um erro técnico: ${error.message || "Falha na conexão"}.`;
             }
@@ -154,22 +152,17 @@ A chave de API configurada no código (**sk-or-v1-f769...**) foi rejeitada pelo 
         });
     }
 
-    // Use simple string content if no image (better compatibility for some reasoning models)
+    // Use simple string content if no image (better compatibility for some models, 
+    // but multimodals usually handle array content fine)
     const finalContent = (imageBase64) ? userContent : text;
 
     const newMessage = { role: "user", content: finalContent };
     this.openRouterHistory.push(newMessage);
 
     // 2. Select Model
-    // DeepSeek R1 is great for reasoning but doesn't support images well.
-    // We switch to Gemini Pro Vision if there is an image.
-    let model = "deepseek/deepseek-r1:free"; 
+    // Updated to Amazon Nova 2 Lite as requested
+    const model = "amazon/nova-2-lite-v1:free"; 
     
-    if (imageBase64) {
-        model = "google/gemini-2.0-pro-exp-02-05:free";
-        console.log("Switching to Vision Model for image analysis");
-    }
-
     // 3. Make the API Call (Non-streaming as requested)
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
@@ -182,8 +175,8 @@ A chave de API configurada no código (**sk-or-v1-f769...**) foi rejeitada pelo 
         body: JSON.stringify({
             model: model,
             messages: this.openRouterHistory,
-            // Only enable reasoning parameter for text-only requests to DeepSeek to avoid 400 Bad Request on vision models
-            reasoning: !imageBase64 ? { enabled: true } : undefined
+            // Enable reasoning as requested in the snippet
+            reasoning: { enabled: true }
         })
     });
 
@@ -207,7 +200,6 @@ A chave de API configurada no código (**sk-or-v1-f769...**) foi rejeitada pelo 
     const content = responseMessage.content || "";
     
     // 4. Capture Reasoning Details (Crucial for "Chain of Thought")
-    // DeepSeek via OpenRouter might return 'reasoning_details' or 'reasoning_content'
     const reasoningDetails = responseMessage.reasoning_details || responseMessage.reasoning_content || null;
 
     // 5. Update History
