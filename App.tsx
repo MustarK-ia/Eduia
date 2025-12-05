@@ -166,7 +166,7 @@ const App: React.FC = () => {
         </div>
         
         <footer className="mt-12 text-sm text-gray-400">
-           © 2024 EduIA. Use para aprender.
+           © 2026 EduIA. Use para aprender.
         </footer>
       </div>
     );
