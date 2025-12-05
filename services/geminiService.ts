@@ -14,7 +14,7 @@ class GeminiService {
 
   constructor() {
     // Validate API Key
-    const apiKey = process.env.API_KEY || "";
+    const apiKey = (process.env.API_KEY || "").trim();
     
     if (!apiKey) {
       console.error("FATAL: API_KEY is missing.");
@@ -59,7 +59,7 @@ class GeminiService {
     mimeType?: string
   ): AsyncGenerator<string, void, unknown> {
     if (!process.env.API_KEY) {
-        yield "⚠️ Erro de Configuração: API_KEY não encontrada.";
+        yield "⚠️ **Erro de Configuração:** API_KEY não encontrada no sistema.";
         return;
     }
 
@@ -70,7 +70,22 @@ class GeminiService {
             yield responseText;
         } catch (error: any) {
             console.error("OpenRouter Error:", error);
-            yield `Desculpe, ocorreu um erro: ${error.message || "Falha na conexão"}.`;
+            // Check specifically for the 401 flag we throw in fetchOpenRouter
+            if (error.message === "OPENROUTER_401") {
+                yield `### ⛔ Acesso Negado (Erro 401)
+                
+A chave de API configurada no código (**sk-or-v1-f769...**) foi rejeitada pelo servidor ("User not found"). Isso significa que ela expirou ou foi deletada.
+
+**Como resolver gratuitamente:**
+1. Acesse [openrouter.ai](https://openrouter.ai)
+2. Faça login com sua conta Google.
+3. Vá em "Keys" e crie uma nova chave.
+4. Substitua a chave no arquivo \`vite.config.ts\`.
+
+*Tentei usar uma chave de backup, mas se você está vendo isso, ela também falhou.*`;
+            } else {
+                yield `Desculpe, ocorreu um erro técnico: ${error.message || "Falha na conexão"}.`;
+            }
         }
         return;
     }
@@ -171,6 +186,10 @@ class GeminiService {
             reasoning: !imageBase64 ? { enabled: true } : undefined
         })
     });
+
+    if (response.status === 401) {
+        throw new Error("OPENROUTER_401");
+    }
 
     if (!response.ok) {
         const errText = await response.text();
