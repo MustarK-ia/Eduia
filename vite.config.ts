@@ -6,9 +6,8 @@ export default defineConfig(({ mode }) => {
   // Load env file based on `mode` in the current working directory.
   const env = loadEnv(mode, '.', '');
   
-  // Use the provided OpenRouter key if no environment variable is set
-  // Updated to new key ending in ...64b7
-  const apiKey = env.API_KEY || "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";
+  // Use the provided Google API key
+  const apiKey = env.API_KEY || "AIzaSyCz_rv25gaz7Yu-zFl8e8Jcq69IWoEUgsE";
 
   return {
     plugins: [react()],
